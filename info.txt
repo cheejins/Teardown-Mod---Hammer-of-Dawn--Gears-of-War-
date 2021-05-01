@@ -1,0 +1,3 @@
+name = Hammer of Dawn
+author = Cheejins
+description = Hammer of Dawn from Gears of War.

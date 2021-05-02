@@ -50,17 +50,21 @@ local hod = {
     beams = 10,
     beamSpread = 12,
     beamLocations = {},
-    beamHoleSize = 1,
+    beamWidths = {
+        thin = 1.2,
+        thick = 5.5,
+    },
+    beamWidth = 5.5,
     beamSpriteHeight = 100,
 
-    beamChaseRate = 0.1,
+    beamChaseRate = 0.15,
 
     beamParticles = 150,
     beamParticlesTrs = {},
     beamAnimationSpeed = 1.2,
 
     timer = 0,
-    rpm = 600,
+    rpm = 500,
 
     targetPositiveBeep = {
         timer = 0,
@@ -126,7 +130,6 @@ function setTarget()
 end
 
 
-
 function shootHod()
     if hod.targetPos ~= nil then
 
@@ -135,29 +138,45 @@ function shootHod()
 
         if hod.charge >= 0.95 then -- Converged beam
 
-            hod.beamHoleSize = 5
+            hod.beamWidth = hod.beamWidths.thick
 
             local targetSubVec = VecScale(VecNormalize(VecSub(rcPos, hod.targetPos)), hod.beamChaseRate) -- Vec pointing towards player raycast.
             hod.targetPos = VecAdd(hod.targetPos, targetSubVec)
-            shootBeam(hod.targetPos, hod.beamHoleSize)
+            shootBeam(hod.targetPos, hod.beamWidth)
             beamAnimation(hod.raycastPos)
+            checkPlayerDamage(hod.raycastPos, 1.2)
 
-            checkPlayerDamage(hod.raycastPos, 2, 3)
+            for i = 1, 5 do
+                local firePos = Vec(
+                    hod.raycastPos[1] + math.random(-hod.beamWidth,hod.beamWidth),
+                    hod.raycastPos[2] + math.random(-0.3, 0.3),
+                    hod.raycastPos[3] + math.random(-hod.beamWidth,hod.beamWidth))
+                SpawnFire(firePos)
+            end
 
-            SpawnParticle("darksmoke", hod.raycastPos, Vec(math.random(-2,2), 1, math.random(-2,2)), 1, 2)
+            SpawnParticle("darksmoke", hod.raycastPos, Vec(math.random(-3,3), 1, math.random(-3,3)), 2, 1)
             snd_HodConvergedLoop()
+
 
         else -- Converging beams
 
-            hod.beamHoleSize = 1.5
+            hod.beamWidth = hod.beamWidths.thin
 
             for i = 1, #hod.beamLocations do
                 local beamLocation = hod.beamLocations[i]
                 local lerpFraction = 1 - hod.charge
                 local beamLerp = VecLerp(hod.targetPos, beamLocation, lerpFraction)
-                shootBeam(beamLerp, hod.beamHoleSize)
+                shootBeam(beamLerp, hod.beamWidth)
 
-                checkPlayerDamage(beamLerp, 1, 1)
+                for i = 1, 3 do
+                    local firePos = Vec(
+                        hod.raycastPos[1] + math.random(-hod.beamWidth,hod.beamWidth),
+                        hod.raycastPos[2] + math.random(-0.3, 0.3),
+                        hod.raycastPos[3] + math.random(-hod.beamWidth,hod.beamWidth))
+                    SpawnFire(firePos)
+                end
+
+                checkPlayerDamage(beamLerp, 0.35)
             end
 
             hod.soundCues.impactPlayed = false
@@ -168,10 +187,10 @@ function shootHod()
 end
 
 
-function checkPlayerDamage(dPos, dist, dmgMult)
-    for i = 1, 10 do
-        if CalcDistance(VecAdd(dPos, Vec(0, dPos[2] + (i*dist), 0)), ppos) < (dist or 1) then
-            SetPlayerHealth(GetPlayerHealth() - hod.playerDamage * (dmgMult or 1))
+function checkPlayerDamage(dPos, dmgMult)
+    for i = 1, 30 do
+        if CalcDistance(VecAdd(dPos, Vec(0, dPos[2] + (i*hod.beamWidth*0.8), 0)), ppos) < hod.beamWidth*0.8 then
+            SetPlayerHealth(GetPlayerHealth() - hod.playerDamage * (dmgMult))
         end
     end
 end
@@ -206,7 +225,18 @@ function shootBeam(pos, holeSize)
     -- Timed for performance.
     if hod.timer <= 0 then
         hod.timer = 60/hod.rpm
-        SpawnFire(pos)
+
+        -- perimeter fire
+        for i = 1, 5 do
+            local edgePos = VecCopy(pos)
+            local rdmDist = math.random(0,2)
+            edgePos[1] = pos[1] + rdmDist
+            edgePos[3] = pos[3] + rdmDist
+
+            -- local centerToEdgeVec = VecScale(VecNormalize(VecSub(edgePos, pos), hod.beamWidths.thick*0.75), hod.beamWidths.thick*hod.charge)
+            -- DebugLine(pos, centerToEdgeVec)
+        end
+        
         MakeHole(rcPos, holeSize, holeSize * 0.75, holeSize * 0.5)
     else
         hod.timer = hod.timer - GetTimeStep()
@@ -216,6 +246,7 @@ end
 
 
 function beamAnimation(pos)
+
     for i = 1, hod.beamParticles do
 
         local beamTr = hod.beamParticlesTrs[i]
@@ -237,8 +268,8 @@ function beamAnimation(pos)
             hod.beamParticlesTrs[i].pos[1] = hod.targetPos[1] + math.random(-0.5, 0.5)
             hod.beamParticlesTrs[i].pos[2] = beamTr.pos[2] - hod.beamAnimationSpeed + math.random(-5, 5)
             hod.beamParticlesTrs[i].pos[3] = hod.targetPos[3] + math.random(-0.5, 0.5)
-        end
 
+        end
     end
 
     local heightOffset = 4
@@ -303,11 +334,23 @@ end
 --[[UTILITY]]
 function raycastFromTransform(tr)
     local plyTransform = tr
-    local fwdPos = TransformToParentPoint(plyTransform, Vec(0, 0, -3000))
+    local fwdPos = TransformToParentPoint(plyTransform, Vec(0, 0, -100))
     local direction = VecSub(fwdPos, plyTransform.pos)
     local dist = VecLength(direction)
     direction = VecNormalize(direction)
     local hit, dist = QueryRaycast(tr.pos, direction, dist)
+    if hit then
+        local hitPos = TransformToParentPoint(plyTransform, Vec(0, 0, dist * -1))
+        return hitPos
+    end
+    return TransformToParentPoint(tr, Vec(0, 0, -1000))
+end
+function spherecastFromTransform(tr, dist, rad)
+    local plyTransform = tr
+    local fwdPos = TransformToParentPoint(plyTransform, Vec(0, 0, -100))
+    local direction = VecSub(fwdPos, plyTransform.pos)
+    direction = VecNormalize(direction)
+    local hit, dist = QueryRaycast(tr.pos, direction, dist, rad)
     if hit then
         local hitPos = TransformToParentPoint(plyTransform, Vec(0, 0, dist * -1))
         return hitPos

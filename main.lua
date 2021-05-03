@@ -1,70 +1,52 @@
 #include "utility.lua"
+#include "staticData.lua"
 
 
 --================================================================================================================
--- Hammer of Dawn (from Gears of War) - By: Cheejins
+-- Hammer of Dawn (Gears of War) - By: Cheejins
 --================================================================================================================
 
 
-local sounds = {
-    HODBeamEnd = LoadSound("MOD/snd/HODBeamEnd.ogg"),
-    HODBeamLoop = LoadLoop("MOD/snd/HODBeamLoop.ogg"),
-    HODBeamLoopB = LoadLoop("MOD/snd/HODBeamLoopB.ogg"),
-    HODEarthCool = LoadSound("MOD/snd/HODEarthCool.ogg"),
-    HODFire01 = LoadSound("MOD/snd/HODFire01.ogg"),
-    HODFireBeam01 = LoadLoop("MOD/snd/HODFireBeam01.ogg"),
-    HODLockOn = LoadSound("MOD/snd/HODLockOn.ogg"),
-    HODRippingEarthLoop = LoadLoop("MOD/snd/HODRippingEarthLoop.ogg"),
-    HoDStartImpact = LoadSound("MOD/snd/HoDStartImpact.ogg"),
-    HoDStartWarmup = LoadSound("MOD/snd/HoDStartWarmup.ogg"),
-    HODTargetPositive01 = LoadSound("MOD/snd/HODTargetPositive01.ogg"),
-}
+-- staticData.lua
+local sounds = getSounds()
+local vols = getVols()
+local sprites = getSprites()
 
---- 5 batch volumes for HUD sounds.
-local vols = {
-    vol1 = 0.1,
-    vol2 = 0.2,
-    vol3 = 0.5,
-    vol4 = 0.75,
-    vol5 = 1.0,
-}
-
-local sprites = {
-    beam = LoadSprite("MOD/img/beam.png"),
-    beam_fire = LoadSprite("MOD/img/beam_fire.png"),
-    beam_fire2 = LoadSprite("MOD/img/beam_fire2.png"),
-    beam_thin = LoadSprite("MOD/img/beam_thin.png"),
-}
 
 -- Hammer of Dawn properties.
 local hod = {
     targetPos = nil,
     targetActive = false,
     raycastPos = nil,
+    raycastTargetPos = nil, -- Raycast down over lerped targetPos (keeps lerped target pos on ground)
     playerDamage = 0.1,
 
-    charge = 0.0,
-    chargeRate = 0.007,
+    charge = 0.0, -- between 0 and 1. Used to lerp thin beams towards center.
+    chargeRate = 0.01, -- convergence speed
     dechargeRate = 0.02,
 
     beams = 10,
-    beamSpread = 12,
+    beamSpread = 14,
     beamLocations = {},
     beamWidths = {
-        thin = 1.2,
-        thick = 5.5,
+        thin = 0.8,
+        thick = 5.2,
     },
-    beamWidth = 5.5,
+    beamWidth = 4,
     beamSpriteHeight = 100,
 
-    beamChaseRate = 0.15,
+    beamChaseRate = 0.17,
 
     beamParticles = 150,
     beamParticlesTrs = {},
     beamAnimationSpeed = 1.2,
 
     timer = 0,
-    rpm = 500,
+    rpm = 1200,
+    explosions = {
+        size = 3,
+        enabled = true,
+    },
 
     targetPositiveBeep = {
         timer = 0,
@@ -125,7 +107,7 @@ function setTarget()
     local spread = hod.beamSpread
 
     for i = 1, hod.beams do
-        hod.beamLocations[i] = VecAdd(hitPos, Vec(math.random(-spread,spread), 0, math.random(-spread,spread)))
+        hod.beamLocations[i] = VecAdd(hitPos, Vec(rdm(-spread,spread), 0, rdm(-spread,spread)))
     end
 end
 
@@ -139,22 +121,26 @@ function shootHod()
         if hod.charge >= 0.95 then -- Converged beam
 
             hod.beamWidth = hod.beamWidths.thick
-
             local targetSubVec = VecScale(VecNormalize(VecSub(rcPos, hod.targetPos)), hod.beamChaseRate) -- Vec pointing towards player raycast.
             hod.targetPos = VecAdd(hod.targetPos, targetSubVec)
+
             shootBeam(hod.targetPos, hod.beamWidth)
-            beamAnimation(hod.raycastPos)
             checkPlayerDamage(hod.raycastPos, 1.2)
+
+            setRaycastTargetPos()
+            -- MakeHole(sphereHitPos, holeSize, holeSize * 0.75, holeSize * 0.5)
+
+            beamAnimation(hod.raycastTargetPos)
 
             for i = 1, 5 do
                 local firePos = Vec(
-                    hod.raycastPos[1] + math.random(-hod.beamWidth,hod.beamWidth),
-                    hod.raycastPos[2] + math.random(-0.3, 0.3),
-                    hod.raycastPos[3] + math.random(-hod.beamWidth,hod.beamWidth))
+                    hod.raycastPos[1] + rdm(-hod.beamWidth,hod.beamWidth),
+                    hod.raycastPos[2] + rdm(-0.3, 0.3),
+                    hod.raycastPos[3] + rdm(-hod.beamWidth,hod.beamWidth))
                 SpawnFire(firePos)
             end
 
-            SpawnParticle("darksmoke", hod.raycastPos, Vec(math.random(-3,3), 1, math.random(-3,3)), 2, 1)
+            SpawnParticle("darksmoke", hod.raycastPos, Vec(rdm(-3,3), 1, rdm(-3,3)), 2, 1)
             snd_HodConvergedLoop()
 
 
@@ -166,13 +152,13 @@ function shootHod()
                 local beamLocation = hod.beamLocations[i]
                 local lerpFraction = 1 - hod.charge
                 local beamLerp = VecLerp(hod.targetPos, beamLocation, lerpFraction)
-                shootBeam(beamLerp, hod.beamWidth)
+                shootBeam(beamLerp)
 
                 for i = 1, 3 do
                     local firePos = Vec(
-                        hod.raycastPos[1] + math.random(-hod.beamWidth,hod.beamWidth),
-                        hod.raycastPos[2] + math.random(-0.3, 0.3),
-                        hod.raycastPos[3] + math.random(-hod.beamWidth,hod.beamWidth))
+                        hod.raycastPos[1] + rdm(-hod.beamWidth,hod.beamWidth),
+                        hod.raycastPos[2] + rdm(-0.3, 0.3),
+                        hod.raycastPos[3] + rdm(-hod.beamWidth,hod.beamWidth))
                     SpawnFire(firePos)
                 end
 
@@ -196,7 +182,7 @@ function checkPlayerDamage(dPos, dmgMult)
 end
 
 
-function shootBeam(pos, holeSize)
+function shootBeam(pos)
 
     -- Raycast down from sky.
     local rcPosUp = VecAdd(pos, Vec(0,hod.beamSpriteHeight,0))
@@ -205,8 +191,8 @@ function shootBeam(pos, holeSize)
     hod.raycastPos = rcPos
 
     -- Beam floor fire
-    local beamFireTr = Transform(rcPos, QuatEuler(math.random(-90,90),math.random(-90,90),math.random(-90,90)))
-    local beamFireTr2 = Transform(rcPos, QuatEuler(math.random(-90,90),math.random(-90,90),math.random(-90,90)))
+    local beamFireTr = Transform(rcPos, QuatEuler(rdm(-90,90),rdm(-90,90),rdm(-90,90)))
+    local beamFireTr2 = Transform(rcPos, QuatEuler(rdm(-90,90),rdm(-90,90),rdm(-90,90)))
     DrawSprite(sprites.beam_fire, beamFireTr, 0.2, 0.2, 1, 1, 1, 1)
     DrawSprite(sprites.beam_fire, beamFireTr2, 0.2, 0.2, 1, 1, 1, 1)
 
@@ -220,7 +206,7 @@ function shootBeam(pos, holeSize)
     SpawnParticle("smoke", rcPos, Vec(0,0,0), 0.5, 0.5)
 
     -- Red light
-    PointLight(rcPos, 1, math.random(0,0.3), 0, math.random(0,1))
+    PointLight(rcPos, 1, rdm(0,0.3), 0, rdm(0,1))
 
     -- Timed for performance.
     if hod.timer <= 0 then
@@ -229,15 +215,38 @@ function shootBeam(pos, holeSize)
         -- perimeter fire
         for i = 1, 5 do
             local edgePos = VecCopy(pos)
-            local rdmDist = math.random(0,2)
+            local rdmDist = rdm(0,2)
             edgePos[1] = pos[1] + rdmDist
             edgePos[3] = pos[3] + rdmDist
 
             -- local centerToEdgeVec = VecScale(VecNormalize(VecSub(edgePos, pos), hod.beamWidths.thick*0.75), hod.beamWidths.thick*hod.charge)
             -- DebugLine(pos, centerToEdgeVec)
         end
-        
-        MakeHole(rcPos, holeSize, holeSize * 0.75, holeSize * 0.5)
+
+        -- Make hole based on the type of beam.
+        local holeTargetPos = rcPos
+        if hod.beamWidth == hod.beamWidths.thick then
+
+            holeTargetPos = hod.raycastTargetPos
+
+            ---- Create timed explosions.
+            -- local rpm = hod.rpm/rdm(50,100)
+            -- if hod.timer <= 60/rpm then
+            --     local vecSpread = rdmVec(0.5,2)
+            --     local explosionPos = VecAdd(holeTargetPos, vecSpread)
+            --     Explosion(explosionPos, 3)
+            -- end
+
+        end
+        MakeHole(holeTargetPos, hod.beamWidth, hod.beamWidth * 0.75, hod.beamWidth * 0.5)
+
+        -- for i = 1, 1 do
+        --     local shpereRcPosHeightOffset = Vec(hod.raycastPos[1], hod.raycastPos[2] + (i*holeSize), hod.raycastPos[3])
+        --     local sphereTr = Transform(shpereRcPosHeightOffset, QuatEuler(0,0,0))
+        --     local sphereHitPos = spherecastFromTransform(sphereTr, 5, 5)
+        --     MakeHole(sphereHitPos, hod.beamWidth, hod.beamWidth * 0.75, hod.beamWidth * 0.5)
+        -- end
+
     else
         hod.timer = hod.timer - GetTimeStep()
     end
@@ -253,28 +262,28 @@ function beamAnimation(pos)
         if beamTr.pos[2] < pos[2] then
             hod.beamParticlesTrs[i].pos[2] = hod.beamSpriteHeight/2
         else
-            local rot = QuatEuler(0,math.random(0,180), 90)
+            local rot = QuatEuler(0,rdm(0,180), 90)
             hod.beamParticlesTrs[i].rot = rot
 
-            local randomSpriteSizeL = math.random(-3, 3)
-            local randomSpriteSizeW = math.random(-1, 1)
+            local randomSpriteSizeL = rdm(-3, 3)
+            local randomSpriteSizeW = rdm(-1, 1)
             DrawSprite(sprites.beam_fire, hod.beamParticlesTrs[i], 8 + randomSpriteSizeL, 1.5 + randomSpriteSizeW, 1, 1, 1, 0.8, 0)
 
             local beamPos2 = hod.beamParticlesTrs[i].pos
-            local beamTr2 = Transform(Vec(beamPos2[1] + math.random(-1, 1), beamPos2[2], beamPos2[3] + math.random(-1, 1)), hod.beamParticlesTrs[i].rot)
+            local beamTr2 = Transform(Vec(beamPos2[1] + rdm(-1, 1), beamPos2[2], beamPos2[3] + rdm(-1, 1)), hod.beamParticlesTrs[i].rot)
             DrawSprite(sprites.beam_fire2, beamTr2, 10 + randomSpriteSizeL, 1 + randomSpriteSizeW, 1, 1, 1, 0.8, 0)
 
             -- Set new beam tr
-            hod.beamParticlesTrs[i].pos[1] = hod.targetPos[1] + math.random(-0.5, 0.5)
-            hod.beamParticlesTrs[i].pos[2] = beamTr.pos[2] - hod.beamAnimationSpeed + math.random(-5, 5)
-            hod.beamParticlesTrs[i].pos[3] = hod.targetPos[3] + math.random(-0.5, 0.5)
+            hod.beamParticlesTrs[i].pos[1] = hod.targetPos[1] + rdm(-0.5, 0.5)
+            hod.beamParticlesTrs[i].pos[2] = beamTr.pos[2] - hod.beamAnimationSpeed + rdm(-5, 5)
+            hod.beamParticlesTrs[i].pos[3] = hod.targetPos[3] + rdm(-0.5, 0.5)
 
         end
     end
 
     local heightOffset = 4
     for i = 1, 10 do
-        PointLight(VecAdd(hod.raycastPos, Vec(0,i*heightOffset,0)), 1, math.random(0,0.3), 0, math.random(2,13))
+        PointLight(VecAdd(hod.raycastPos, Vec(0,i*heightOffset,0)), 1, rdm(0,0.3), 0, rdm(2,13))
     end
 
 end
@@ -282,11 +291,18 @@ end
 
 function initBeamAnimation()
     for i = 1, hod.beamParticles do
-        local randomHeightOffset = math.random(0,hod.beamSpriteHeight)
+        local randomHeightOffset = rdm(0,hod.beamSpriteHeight)
         local tr = Transform(VecAdd(hod.targetPos, Vec(0,randomHeightOffset,0)), QuatEuler(0,90,90))
 
         hod.beamParticlesTrs[i] = tr
     end
+end
+
+
+function setRaycastTargetPos()
+    local targetPosBeamHeight = VecAdd(hod.targetPos, Vec(0,hod.heightOffset,0))
+    local rcTargetFloorTr = Transform(targetPosBeamHeight, QuatLookDown(hod.targetPos))
+    hod.raycastTargetPos = raycastFromTransform(rcTargetFloorTr)
 end
 
 
@@ -295,6 +311,7 @@ function increaseCharge()
         hod.charge = hod.charge + hod.chargeRate
     end
 end
+
 
 --[[SOUND]]
 function snd_HodStart()
@@ -334,7 +351,7 @@ end
 --[[UTILITY]]
 function raycastFromTransform(tr)
     local plyTransform = tr
-    local fwdPos = TransformToParentPoint(plyTransform, Vec(0, 0, -100))
+    local fwdPos = TransformToParentPoint(plyTransform, Vec(0, 0, -1000))
     local direction = VecSub(fwdPos, plyTransform.pos)
     local dist = VecLength(direction)
     direction = VecNormalize(direction)
@@ -347,7 +364,7 @@ function raycastFromTransform(tr)
 end
 function spherecastFromTransform(tr, dist, rad)
     local plyTransform = tr
-    local fwdPos = TransformToParentPoint(plyTransform, Vec(0, 0, -100))
+    local fwdPos = TransformToParentPoint(plyTransform, Vec(0, 0, -1000))
     local direction = VecSub(fwdPos, plyTransform.pos)
     direction = VecNormalize(direction)
     local hit, dist = QueryRaycast(tr.pos, direction, dist, rad)
@@ -356,4 +373,10 @@ function spherecastFromTransform(tr, dist, rad)
         return hitPos
     end
     return TransformToParentPoint(tr, Vec(0, 0, -1000))
+end
+function QuatLookDown(pos)
+    local downVec = Vec(0,-1,0)
+    local downPos = VecAdd(pos, downVec)
+    local downRot = QuatLookAt(pos, downPos)
+    return downRot
 end

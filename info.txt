@@ -1,3 +1,3 @@
-name = Hammer of Dawn
+name = Hammer of Dawn (Gears of War)
 author = Cheejins
-description = Hammer of Dawn from Gears of War.
+description = Hammer of Dawn from Gears of War. Melt your friends and your neighbors with the power of converging satellite lasers shot from space.

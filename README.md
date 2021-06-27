@@ -1,5 +1,8 @@
 <h1 align="center"> Hammer Of Dawn (Teardown Mod) </h1>
-<p align="center">A simple script which allows the player to move faster or slower based on the position and velocity of the player. </p>
+<p align="center">Melt your friends and your neighbors with the power of converging satellite lasers shot from space. </p>
+<br>
+
+<p align="center">A scripted weapon that uses raycasting and vector lerping to converge laser beams into a single large beam. </p>
 <br>
 
 

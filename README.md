@@ -21,4 +21,4 @@ Main script files:
 <br>
 
 ## Links
-* [Download: Steam Workshop Page](https://steamcommunity.com/sharedfiles/filedetails/?id=2515136805)
+* [Download: Steam Workshop Page](https://steamcommunity.com/sharedfiles/filedetails/?id=2473122987)

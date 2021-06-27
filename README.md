@@ -9,6 +9,8 @@
 ## Media
 * [Demonstration Video](https://www.youtube.com/watch?v=KNr01lnrQDg)
 * [Youtuber "Simply Chris" plays the mod](https://www.youtube.com/watch?v=DoV9J_KeMwY&t=303s)
+* [Youtuber "Fynnpire" plays the mod](https://youtu.be/3M5WGryllU0?t=777)
+
 
 <br>
 
